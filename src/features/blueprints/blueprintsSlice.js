@@ -1,37 +1,25 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit'
-import api from '../../services/apiClient.js'
-
-export const fetchAuthors = createAsyncThunk('blueprints/fetchAuthors', async () => {
-  const { data } = await api.get('/blueprints')
-  // Expecting API returns array of {author, name, points}
-  const authors = [...new Set(data.map((bp) => bp.author))]
-  return authors
-})
+import service from '../../services/blueprintsService.js'
 
 export const fetchByAuthor = createAsyncThunk('blueprints/fetchByAuthor', async (author) => {
-  const { data } = await api.get(`/blueprints/${encodeURIComponent(author)}`)
-  return { author, items: data }
+  const items = await service.getByAuthor(author)
+  return { author, items }
 })
 
 export const fetchBlueprint = createAsyncThunk(
   'blueprints/fetchBlueprint',
   async ({ author, name }) => {
-    const { data } = await api.get(
-      `/blueprints/${encodeURIComponent(author)}/${encodeURIComponent(name)}`,
-    )
-    return data
+    return await service.getByAuthorAndName(author, name)
   },
 )
 
 export const createBlueprint = createAsyncThunk('blueprints/createBlueprint', async (payload) => {
-  const { data } = await api.post('/blueprints', payload)
-  return data
+  return await service.create(payload)
 })
 
 const slice = createSlice({
   name: 'blueprints',
   initialState: {
-    authors: [],
     byAuthor: {},
     current: null,
     status: 'idle',
@@ -40,19 +28,17 @@ const slice = createSlice({
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addCase(fetchAuthors.pending, (s) => {
+      .addCase(fetchByAuthor.pending, (s) => {
         s.status = 'loading'
-      })
-      .addCase(fetchAuthors.fulfilled, (s, a) => {
-        s.status = 'succeeded'
-        s.authors = a.payload
-      })
-      .addCase(fetchAuthors.rejected, (s, a) => {
-        s.status = 'failed'
-        s.error = a.error.message
+        s.error = null
       })
       .addCase(fetchByAuthor.fulfilled, (s, a) => {
+        s.status = 'succeeded'
         s.byAuthor[a.payload.author] = a.payload.items
+      })
+      .addCase(fetchByAuthor.rejected, (s, a) => {
+        s.status = 'failed'
+        s.error = a.error.message
       })
       .addCase(fetchBlueprint.fulfilled, (s, a) => {
         s.current = a.payload

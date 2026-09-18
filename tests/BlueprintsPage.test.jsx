@@ -4,18 +4,15 @@ import { Provider } from 'react-redux'
 import { configureStore, createSlice } from '@reduxjs/toolkit'
 import BlueprintsPage from '../src/pages/BlueprintsPage.jsx'
 
-// Mock de thunks del slice para no requerir backend
 vi.mock('../src/features/blueprints/blueprintsSlice.js', () => ({
-  fetchAuthors: () => ({ type: 'blueprints/fetchAuthors' }),
   fetchByAuthor: (author) => ({ type: 'blueprints/fetchByAuthor', payload: author }),
   fetchBlueprint: (payload) => ({ type: 'blueprints/fetchBlueprint', payload }),
 }))
 
-function makeStore(preloaded) {
+function makeStore(preloaded = {}) {
   const slice = createSlice({
     name: 'blueprints',
     initialState: {
-      authors: [],
       byAuthor: {},
       current: null,
       status: 'idle',
@@ -37,9 +34,9 @@ describe('BlueprintsPage', () => {
       </Provider>,
     )
 
-    fireEvent.change(screen.getByPlaceholderText(/Author/i), { target: { value: 'JohnConnor' } })
+    fireEvent.change(screen.getByPlaceholderText(/Author/i), { target: { value: 'john' } })
     fireEvent.click(screen.getByText(/Get blueprints/i))
 
-    expect(spy).toHaveBeenCalledWith({ type: 'blueprints/fetchByAuthor', payload: 'JohnConnor' })
+    expect(spy).toHaveBeenCalledWith({ type: 'blueprints/fetchByAuthor', payload: 'john' })
   })
 })

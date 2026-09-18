@@ -12,7 +12,7 @@ describe('BlueprintForm', () => {
     fireEvent.change(screen.getByLabelText(/Puntos/i), {
       target: { value: '[{"x":1,"y":2}]' },
     })
-    fireEvent.submit(screen.getByText(/Guardar/i))
+    fireEvent.click(screen.getByText(/Guardar/i))
 
     expect(onSubmit).toHaveBeenCalledWith({
       author: 'john',

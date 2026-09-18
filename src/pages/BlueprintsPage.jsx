@@ -1,22 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
-  fetchAuthors,
   fetchByAuthor,
   fetchBlueprint,
+  createBlueprint,
 } from '../features/blueprints/blueprintsSlice.js'
 import BlueprintCanvas from '../components/BlueprintCanvas.jsx'
+import BlueprintForm from '../components/BlueprintForm.jsx'
 
 export default function BlueprintsPage() {
   const dispatch = useDispatch()
-  const { byAuthor, current, status } = useSelector((s) => s.blueprints)
+  const { byAuthor, current, status, error } = useSelector((s) => s.blueprints)
   const [authorInput, setAuthorInput] = useState('')
   const [selectedAuthor, setSelectedAuthor] = useState('')
+  const [showForm, setShowForm] = useState(false)
   const items = byAuthor[selectedAuthor] || []
-
-  useEffect(() => {
-    dispatch(fetchAuthors())
-  }, [dispatch])
 
   const totalPoints = useMemo(
     () => items.reduce((acc, bp) => acc + (bp.points?.length || 0), 0),
@@ -24,13 +22,18 @@ export default function BlueprintsPage() {
   )
 
   const getBlueprints = () => {
-    if (!authorInput) return
-    setSelectedAuthor(authorInput)
-    dispatch(fetchByAuthor(authorInput))
+    if (!authorInput.trim()) return
+    setSelectedAuthor(authorInput.trim())
+    dispatch(fetchByAuthor(authorInput.trim()))
   }
 
   const openBlueprint = (bp) => {
     dispatch(fetchBlueprint({ author: bp.author, name: bp.name }))
+  }
+
+  const handleCreate = (blueprint) => {
+    dispatch(createBlueprint(blueprint))
+    setShowForm(false)
   }
 
   return (
@@ -44,6 +47,7 @@ export default function BlueprintsPage() {
               placeholder="Author"
               value={authorInput}
               onChange={(e) => setAuthorInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && getBlueprints()}
             />
             <button className="btn primary" onClick={getBlueprints}>
               Get blueprints
@@ -56,28 +60,17 @@ export default function BlueprintsPage() {
             {selectedAuthor ? `${selectedAuthor}'s blueprints:` : 'Results'}
           </h3>
           {status === 'loading' && <p>Cargando...</p>}
-          {!items.length && status !== 'loading' && <p>Sin resultados.</p>}
+          {status === 'failed' && <p style={{ color: '#f87171' }}>{error}</p>}
+          {!items.length && status !== 'loading' && status !== 'failed' && <p>Sin resultados.</p>}
           {!!items.length && (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    <th
-                      style={{
-                        textAlign: 'left',
-                        padding: '8px',
-                        borderBottom: '1px solid #334155',
-                      }}
-                    >
+                    <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #334155' }}>
                       Blueprint name
                     </th>
-                    <th
-                      style={{
-                        textAlign: 'right',
-                        padding: '8px',
-                        borderBottom: '1px solid #334155',
-                      }}
-                    >
+                    <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid #334155' }}>
                       Number of points
                     </th>
                     <th style={{ padding: '8px', borderBottom: '1px solid #334155' }}></th>
@@ -86,16 +79,8 @@ export default function BlueprintsPage() {
                 <tbody>
                   {items.map((bp) => (
                     <tr key={bp.name}>
-                      <td style={{ padding: '8px', borderBottom: '1px solid #1f2937' }}>
-                        {bp.name}
-                      </td>
-                      <td
-                        style={{
-                          padding: '8px',
-                          textAlign: 'right',
-                          borderBottom: '1px solid #1f2937',
-                        }}
-                      >
+                      <td style={{ padding: '8px', borderBottom: '1px solid #1f2937' }}>{bp.name}</td>
+                      <td style={{ padding: '8px', textAlign: 'right', borderBottom: '1px solid #1f2937' }}>
                         {bp.points?.length || 0}
                       </td>
                       <td style={{ padding: '8px', borderBottom: '1px solid #1f2937' }}>
@@ -111,6 +96,11 @@ export default function BlueprintsPage() {
           )}
           <p style={{ marginTop: 12, fontWeight: 700 }}>Total user points: {totalPoints}</p>
         </div>
+
+        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>
+          {showForm ? 'Cancelar' : 'Nuevo Blueprint'}
+        </button>
+        {showForm && <BlueprintForm onSubmit={handleCreate} />}
       </section>
 
       <section className="card">
