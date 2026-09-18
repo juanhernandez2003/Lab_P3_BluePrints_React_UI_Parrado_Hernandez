@@ -137,10 +137,10 @@ VITE_USE_MOCK=true
 ## 📌 Recomendaciones y actividades sugeridas para el exito del laboratorio
 
 1. **Redux avanzado**
-   - [ ] Agrega estados `loading/error` por _thunk_ y muéstralos en la UI.
-   - [ ] Implementa _memo selectors_ para derivar el top-5 de blueprints por cantidad de puntos.
+   - [x] Agrega estados `loading/error` por _thunk_ y muéstralos en la UI.
+   - [x] Implementa _memo selectors_ para derivar el top-5 de blueprints por cantidad de puntos.
 2. **Rutas protegidas**
-   - [ ] Crea un componente `<PrivateRoute>` y protege la creación/edición.
+   - [x] Crea un componente `<PrivateRoute>` y protege la creación/edición.
 3. **CRUD completo**
    - [ ] Implementa `PUT /api/blueprints/{author}/{name}` y `DELETE ...` en el slice y en la UI.
    - [ ] Optimistic updates (revertir si falla).
@@ -148,14 +148,14 @@ VITE_USE_MOCK=true
    - [ ] Reemplaza el `svg` por un lienzo donde el usuario haga _click_ para agregar puntos.
    - [ ] Botón “Guardar” que envíe el blueprint.
 5. **Errores y _Retry_**
-   - [ ] Si `GET` falla, muestra un banner y un botón **Reintentar** que dispare el thunk.
+   - [x] Si `GET` falla, muestra un banner y un botón **Reintentar** que dispare el thunk.
 6. **Testing**
-   - [ ] Pruebas de `blueprintsSlice` (reducers puros).
-   - [ ] Pruebas de componentes con Testing Library (render, interacción).
+   - [x] Pruebas de `blueprintsSlice` (reducers puros).
+   - [x] Pruebas de componentes con Testing Library (render, interacción).
 7. **CI/Lint/Format**
-   - [ ] Activa **GitHub Actions** (workflow incluido) → lint + test + build.
+   - [x] Activa **GitHub Actions** (workflow incluido) → lint + test + build.
 8. **Docker (opcional)**
-   - [ ] Crea `Dockerfile` (+ `compose`) para front + backend.
+   - [x] Crea `Dockerfile` (+ `compose`) para front + backend.
 
 ## Criterios de evaluación
 

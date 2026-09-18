@@ -7,6 +7,21 @@ import BlueprintsPage from '../src/pages/BlueprintsPage.jsx'
 vi.mock('../src/features/blueprints/blueprintsSlice.js', () => ({
   fetchByAuthor: (author) => ({ type: 'blueprints/fetchByAuthor', payload: author }),
   fetchBlueprint: (payload) => ({ type: 'blueprints/fetchBlueprint', payload }),
+  createBlueprint: (payload) => ({ type: 'blueprints/createBlueprint', payload }),
+  selectTopBlueprints: (() => {
+    let lastByAuthor
+    let lastResult = []
+    return (state) => {
+      if (state.blueprints.byAuthor !== lastByAuthor) {
+        lastByAuthor = state.blueprints.byAuthor
+        lastResult = Object.values(lastByAuthor)
+          .flat()
+          .sort((a, b) => (b.points?.length || 0) - (a.points?.length || 0))
+          .slice(0, 5)
+      }
+      return lastResult
+    }
+  })(),
 }))
 
 function makeStore(preloaded = {}) {
@@ -17,6 +32,11 @@ function makeStore(preloaded = {}) {
       current: null,
       status: 'idle',
       error: null,
+      lastAuthorQuery: null,
+      blueprintStatus: 'idle',
+      blueprintError: null,
+      createStatus: 'idle',
+      createError: null,
       ...preloaded,
     },
     reducers: {},

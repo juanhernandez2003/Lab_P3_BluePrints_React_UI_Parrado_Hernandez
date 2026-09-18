@@ -4,16 +4,29 @@ import {
   fetchByAuthor,
   fetchBlueprint,
   createBlueprint,
+  selectTopBlueprints,
 } from '../features/blueprints/blueprintsSlice.js'
 import BlueprintCanvas from '../components/BlueprintCanvas.jsx'
 import BlueprintForm from '../components/BlueprintForm.jsx'
 
 export default function BlueprintsPage() {
   const dispatch = useDispatch()
-  const { byAuthor, current, status, error } = useSelector((s) => s.blueprints)
+  const {
+    byAuthor,
+    current,
+    status,
+    error,
+    lastAuthorQuery,
+    blueprintStatus,
+    blueprintError,
+    createStatus,
+    createError,
+  } = useSelector((s) => s.blueprints)
+  const topBlueprints = useSelector(selectTopBlueprints)
   const [authorInput, setAuthorInput] = useState('')
   const [selectedAuthor, setSelectedAuthor] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [lastOpened, setLastOpened] = useState(null)
   const items = byAuthor[selectedAuthor] || []
 
   const totalPoints = useMemo(
@@ -21,13 +34,14 @@ export default function BlueprintsPage() {
     [items],
   )
 
-  const getBlueprints = () => {
-    if (!authorInput.trim()) return
-    setSelectedAuthor(authorInput.trim())
-    dispatch(fetchByAuthor(authorInput.trim()))
+  const getBlueprints = (author = authorInput) => {
+    if (!author.trim()) return
+    setSelectedAuthor(author.trim())
+    dispatch(fetchByAuthor(author.trim()))
   }
 
   const openBlueprint = (bp) => {
+    setLastOpened({ author: bp.author, name: bp.name })
     dispatch(fetchBlueprint({ author: bp.author, name: bp.name }))
   }
 
@@ -49,7 +63,7 @@ export default function BlueprintsPage() {
               onChange={(e) => setAuthorInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && getBlueprints()}
             />
-            <button className="btn primary" onClick={getBlueprints}>
+            <button className="btn primary" onClick={() => getBlueprints()}>
               Get blueprints
             </button>
           </div>
@@ -60,7 +74,14 @@ export default function BlueprintsPage() {
             {selectedAuthor ? `${selectedAuthor}'s blueprints:` : 'Results'}
           </h3>
           {status === 'loading' && <p>Cargando...</p>}
-          {status === 'failed' && <p style={{ color: '#f87171' }}>{error}</p>}
+          {status === 'failed' && (
+            <div style={{ color: '#f87171', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span>{error}</span>
+              <button className="btn" onClick={() => getBlueprints(lastAuthorQuery || authorInput)}>
+                Reintentar
+              </button>
+            </div>
+          )}
           {!items.length && status !== 'loading' && status !== 'failed' && <p>Sin resultados.</p>}
           {!!items.length && (
             <div style={{ overflowX: 'auto' }}>
@@ -97,14 +118,41 @@ export default function BlueprintsPage() {
           <p style={{ marginTop: 12, fontWeight: 700 }}>Total user points: {totalPoints}</p>
         </div>
 
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Top 5 blueprints (por puntos)</h3>
+          {!topBlueprints.length && <p>Sin datos todavía. Busca un autor primero.</p>}
+          {!!topBlueprints.length && (
+            <ol style={{ margin: 0, paddingLeft: 20 }}>
+              {topBlueprints.map((bp) => (
+                <li key={`${bp.author}-${bp.name}`}>
+                  {bp.name} ({bp.author}) — {bp.points?.length || 0} puntos
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+
         <button className="btn primary" onClick={() => setShowForm((v) => !v)}>
           {showForm ? 'Cancelar' : 'Nuevo Blueprint'}
         </button>
         {showForm && <BlueprintForm onSubmit={handleCreate} />}
+        {createStatus === 'loading' && <p>Creando blueprint...</p>}
+        {createStatus === 'failed' && (
+          <p style={{ color: '#f87171' }}>Error al crear: {createError}</p>
+        )}
       </section>
 
       <section className="card">
         <h3 style={{ marginTop: 0 }}>Current blueprint: {current?.name || '—'}</h3>
+        {blueprintStatus === 'loading' && <p>Cargando plano...</p>}
+        {blueprintStatus === 'failed' && (
+          <div style={{ color: '#f87171', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span>{blueprintError}</span>
+            <button className="btn" onClick={() => lastOpened && dispatch(fetchBlueprint(lastOpened))}>
+              Reintentar
+            </button>
+          </div>
+        )}
         <BlueprintCanvas points={current?.points || []} />
       </section>
     </div>

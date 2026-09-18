@@ -28,15 +28,15 @@ VITE_USE_MOCK=false  # backend real
 
 ### Redux
 
-El slice `blueprintsSlice` maneja tres thunks: `fetchByAuthor`, `fetchBlueprint` y `createBlueprint`. El estado guarda los blueprints por autor, el blueprint actual y el estado de carga/error. Ningún componente toca el DOM directamente.
+El slice `blueprintsSlice` maneja tres thunks: `fetchByAuthor`, `fetchBlueprint` y `createBlueprint`. Cada thunk tiene su propio par `status`/`error` (`status`/`error` para la búsqueda por autor, `blueprintStatus`/`blueprintError` para abrir un plano, `createStatus`/`createError` para crear uno), así la UI puede mostrar carga y error de forma independiente para cada acción. Si un `GET` falla, se muestra un banner con botón **Reintentar** que vuelve a despachar el mismo thunk. También se agregó `selectTopBlueprints`, un selector memoizado (`createSelector` de Redux Toolkit) que deriva el top-5 de blueprints por cantidad de puntos a partir de todos los autores consultados. Ningún componente toca el DOM directamente.
 
 ### Canvas
 
-`BlueprintCanvas` recibe un array de puntos y los dibuja con líneas y círculos sobre un fondo oscuro con grilla. Se actualiza solo cuando cambian los puntos.
+`BlueprintCanvas` recibe un array de puntos y los dibuja con líneas y círculos sobre un fondo oscuro con grilla. Los puntos se auto-escalan (`fitPoints`) para ocupar el canvas completo con un margen, sin importar el rango de coordenadas que use el backend o el mock. Se actualiza solo cuando cambian los puntos.
 
 ### Login y rutas protegidas
 
-El login llama a `POST /auth/login`, guarda el `access_token` en `localStorage` y redirige al inicio. `PrivateRoute` revisa si hay token antes de dejar entrar a cualquier ruta protegida; si no hay, manda al login.
+El login llama a `POST /auth/login`, guarda el `access_token` en `localStorage` y redirige al inicio. `PrivateRoute` revisa si hay token antes de dejar entrar a cualquier ruta protegida; si no hay, manda al login. Con `VITE_USE_MOCK=true` el login no llama al backend: genera un token local para poder probar toda la app (incluido el login) sin tener el backend corriendo.
 
 ---
 
