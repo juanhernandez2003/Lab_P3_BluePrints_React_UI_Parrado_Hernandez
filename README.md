@@ -22,7 +22,7 @@ Ver la especificación de glosario clave, consulta las [Definiciones del laborat
 - `GET /api/blueprints/{author}`
 - `GET /api/blueprints/{author}/{name}`
 - `POST /api/blueprints` (requiere JWT)
-- `POST /api/auth/login` → `{ token }`
+- `POST /api/auth/login` → `{ access_token }`
 
 Configura la URL base en `.env`.
 

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/apiClient.js'
 
+const useMock = import.meta.env.VITE_USE_MOCK === 'true'
+
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -11,6 +13,11 @@ export default function LoginPage() {
   const submit = async (e) => {
     e.preventDefault()
     setError(null)
+    if (useMock) {
+      localStorage.setItem('token', `mock-token-${username || 'guest'}`)
+      navigate('/')
+      return
+    }
     try {
       const { data } = await api.post('/auth/login', { username, password })
       localStorage.setItem('token', data.access_token)
