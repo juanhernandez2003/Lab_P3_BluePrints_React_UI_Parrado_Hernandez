@@ -18,6 +18,11 @@ Ver la especificación de glosario clave, consulta las [Definiciones del laborat
 
 ## Endpoints esperados (ajústalos si tu backend quedo diferente)
 
+> **En este proyecto** el backend del Lab P2 expone `/api/v1/blueprints/...` y `POST /auth/login`,
+> y envuelve las respuestas en `{ code, message, data }`. El cliente ya está ajustado a eso
+> (ver `VITE_API_BASE_URL` / `VITE_AUTH_URL` y `unwrap` en `src/services/apiClient.js`).
+> El dev server de Vite hace de proxy (`/api`, `/auth` → `VITE_BACKEND_URL`), así que no hace falta CORS.
+
 - `GET /api/blueprints` → lista general o catálogo para derivar autores.
 - `GET /api/blueprints/{author}`
 - `GET /api/blueprints/{author}/{name}`
@@ -42,7 +47,11 @@ Abre `http://localhost:5173`
 Crea un archivo `.env` en la raíz:
 
 ```variable
-VITE_API_BASE_URL=http://localhost:8080/api
+VITE_USE_MOCK=true                     # true = apimock, false = backend real
+VITE_API_BASE_URL=/api/v1              # prefijo de los endpoints de blueprints
+VITE_AUTH_URL=/auth/login              # endpoint de login
+VITE_BACKEND_URL=http://localhost:8080 # destino del proxy de Vite
+VITE_MOCK_WRITE_FAIL_RATE=0            # solo mock: 0..1, simula fallos para ver el rollback
 ```
 
 > **Tip:** en producción usa variables seguras o un _reverse proxy_.
@@ -142,11 +151,11 @@ VITE_USE_MOCK=true
 2. **Rutas protegidas**
    - [x] Crea un componente `<PrivateRoute>` y protege la creación/edición.
 3. **CRUD completo**
-   - [ ] Implementa `PUT /api/blueprints/{author}/{name}` y `DELETE ...` en el slice y en la UI.
-   - [ ] Optimistic updates (revertir si falla).
+   - [x] Implementa `PUT /api/blueprints/{author}/{name}` y `DELETE ...` en el slice y en la UI.
+   - [x] Optimistic updates (revertir si falla).
 4. **Dibujo interactivo**
-   - [ ] Reemplaza el `svg` por un lienzo donde el usuario haga _click_ para agregar puntos.
-   - [ ] Botón “Guardar” que envíe el blueprint.
+   - [x] Reemplaza el `svg` por un lienzo donde el usuario haga _click_ para agregar puntos.
+   - [x] Botón “Guardar” que envíe el blueprint.
 5. **Errores y _Retry_**
    - [x] Si `GET` falla, muestra un banner y un botón **Reintentar** que dispare el thunk.
 6. **Testing**
@@ -181,6 +190,6 @@ VITE_USE_MOCK=true
 
 - **Redux Toolkit Query** para _caching_ de requests.
 - **MSW** para _mocks_ sin backend.
-- **Dark mode** y diseño responsive.
+- [x] **Dark mode** y diseño responsive.
 
 > Este proyecto es un punto de partida para que tus estudiantes evolucionen el cliente clásico de Blueprints a una SPA moderna con prácticas de la industria.

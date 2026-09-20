@@ -1,14 +1,17 @@
-version: '3.9'
+# Front (nginx) + backend del Lab P2. Levantar con: docker compose up --build
+# Abrir http://localhost:5173  (usuarios: student/student123, assistant/assistant123)
 services:
-  web:
-    build: .
-    ports:
-      - '5173:4173'
-    environment:
-      - VITE_API_BASE_URL=http://backend:8080/api
-    depends_on:
-      - backend
   backend:
-    image: ghcr.io/your-org/blueprints-backend:latest
+    build: ../Lab_P2_BluePrints_Java21API_Security_JWT_parrado_hernandez
     ports:
       - '8080:8080'
+
+  web:
+    build:
+      context: .
+      args:
+        VITE_USE_MOCK: 'false'
+    ports:
+      - '5173:80'
+    depends_on:
+      - backend

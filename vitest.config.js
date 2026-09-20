@@ -7,5 +7,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './tests/setup.js',
+    // Las pruebas siempre usan el mock, sin retardo, sin importar el .env local.
+    env: { VITE_USE_MOCK: 'true', VITE_MOCK_DELAY_MS: '0', VITE_MOCK_WRITE_FAIL_RATE: '0' },
   },
 })

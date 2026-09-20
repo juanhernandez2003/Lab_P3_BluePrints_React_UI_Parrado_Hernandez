@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import api from '../services/apiClient.js'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { login } from '../services/authService.js'
 
 const useMock = import.meta.env.VITE_USE_MOCK === 'true'
 
@@ -8,28 +8,30 @@ export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = location.state?.from?.pathname || '/'
+  const expired = location.state?.expired
 
   const submit = async (e) => {
     e.preventDefault()
     setError(null)
-    if (useMock) {
-      localStorage.setItem('token', `mock-token-${username || 'guest'}`)
-      navigate('/')
-      return
-    }
+    setLoading(true)
     try {
-      const { data } = await api.post('/auth/login', { username, password })
-      localStorage.setItem('token', data.access_token)
-      navigate('/')
-    } catch {
-      setError('Credenciales inválidas o servidor no disponible')
+      await login(username, password)
+      navigate(from, { replace: true })
+    } catch (err) {
+      setError(err.message || 'Credenciales inválidas o servidor no disponible')
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <form className="card" onSubmit={submit} style={{ maxWidth: 400, margin: '40px auto' }}>
-      <h2 style={{ marginTop: 0 }}>Login</h2>
+    <form className="card login" onSubmit={submit}>
+      <h2 className="card-title">Login</h2>
+      {expired && <p className="banner warn">Tu sesión expiró. Vuelve a iniciar sesión.</p>}
       <div className="grid cols-2">
         <div>
           <label htmlFor="username">Usuario</label>
@@ -38,7 +40,8 @@ export default function LoginPage() {
             className="input"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="student"
+            placeholder="assistant"
+            autoComplete="username"
           />
         </div>
         <div>
@@ -49,13 +52,23 @@ export default function LoginPage() {
             className="input"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
           />
         </div>
       </div>
-      {error && <p style={{ color: '#f87171' }}>{error}</p>}
-      <button className="btn primary" style={{ marginTop: 12 }}>
-        Ingresar
+      {error && (
+        <p className="text-error" role="alert">
+          {error}
+        </p>
+      )}
+      <button className="btn primary" disabled={loading}>
+        {loading ? 'Ingresando...' : 'Ingresar'}
       </button>
+      <p className="muted small">
+        {useMock
+          ? 'Modo mock: cualquier usuario entra; "student" queda con permiso solo de lectura.'
+          : 'Usuarios: student / student123 (lectura) · assistant / assistant123 (lectura y escritura).'}
+      </p>
     </form>
   )
 }

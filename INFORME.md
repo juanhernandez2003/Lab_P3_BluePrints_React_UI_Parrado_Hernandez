@@ -1,12 +1,33 @@
 # Informe Lab P3 – React UI para Blueprints
 
-**Integrantes:** Nicolás Parrado, Hernandez
+**Integrantes:** Nicolás Parrado, Juan Esteban Hernández
 
 ---
 
 ## Qué se hizo
 
-Se construyó una SPA en React que consume el backend de los labs anteriores (Spring Boot + JWT). La app permite buscar blueprints por autor, verlos en una tabla y dibujarlos en un canvas. También tiene login con JWT y un formulario para crear blueprints nuevos.
+Una SPA en React + Vite que consume el backend del Lab P2 (Spring Boot + JWT RS256). Permite:
+
+- Iniciar sesión (JWT) y proteger todas las rutas con `PrivateRoute`.
+- Buscar los blueprints de un autor, verlos en una tabla (nombre, número de puntos, `Open`) y el total de puntos.
+- Abrir un plano: su nombre queda en el estado global (Redux) y se dibuja en el canvas (segmentos consecutivos + cada punto marcado).
+- **CRUD completo**: crear (dibujando con clicks o escribiendo JSON), editar (click en el lienzo agrega puntos → `Guardar` envía `PUT`) y eliminar (`DELETE`), con **optimistic updates** que se revierten si el servidor falla.
+- Top-5 de blueprints por cantidad de puntos (selector memoizado).
+- Modo claro/oscuro y diseño responsive.
+
+---
+
+## Requerimientos del laboratorio
+
+| # | Requerimiento | Dónde |
+|---|---|---|
+| 1 | Canvas con id propio (`blueprint-canvas`), 520×360 | `components/BlueprintCanvas.jsx` |
+| 2 | Consultar planos por autor y mostrarlos en tabla con `Open` | `pages/BlueprintsPage.jsx` |
+| 3 | `Open` actualiza el campo "Plano actual", trae los puntos y los dibuja | `fetchBlueprint` + `BlueprintEditor` |
+| 4 | `apimock` y `apiclient` con la misma interfaz; cambio con `VITE_USE_MOCK` | `services/` |
+| 5 | Nombre del plano actual desde Redux, sin tocar el DOM | `state.blueprints.current` |
+| 6 | Estilos (tabla, botones, tarjetas, banners, tema claro/oscuro) | `styles.css` |
+| 7 | Pruebas con Vitest + Testing Library | `tests/` (34 pruebas) |
 
 ---
 
@@ -14,52 +35,69 @@ Se construyó una SPA en React que consume el backend de los labs anteriores (Sp
 
 ### Servicios (`apimock` / `apiclient`)
 
-Se implementaron dos servicios con la misma interfaz (`getAll`, `getByAuthor`, `getByAuthorAndName`, `create`):
+Ambos exponen `getAll`, `getByAuthor`, `getByAuthorAndName`, `create`, `update` y `remove`.
 
-- `apimock.js`: devuelve datos en memoria, no necesita backend.
-- `apiclientService.js`: hace las llamadas reales con Axios, manda el JWT en cada request.
-- `blueprintsService.js`: decide cuál usar según `VITE_USE_MOCK` en el `.env`.
+- `apimock.js`: datos en memoria (los mismos tres blueprints que el backend). Devuelve copias para que Redux (que congela el estado) nunca comparta referencias con el "servidor". Con `VITE_MOCK_WRITE_FAIL_RATE` se pueden simular fallos de escritura para ver el rollback.
+- `apiclientService.js`: Axios contra `/api/v1/blueprints`. El backend responde `{ code, message, data }`, así que `unwrap` extrae `data`.
+- `blueprintsService.js`: la única línea que decide cuál usar según `VITE_USE_MOCK`.
 
-Para cambiar entre uno y otro basta con editar el `.env`:
-```
-VITE_USE_MOCK=true   # mock
-VITE_USE_MOCK=false  # backend real
-```
+### Seguridad (JWT)
+
+- `apiClient.js`: instancia única de Axios con dos interceptores. El de salida agrega `Authorization: Bearer <token>`. El de entrada traduce errores: un `401` borra el token y emite `auth:expired` (la app redirige al login con el aviso "Tu sesión expiró"); un `403` muestra "scope insuficiente"; si no hay conexión lo dice claramente.
+- `auth.js`: decodifica el payload del JWT (solo para la UI, la firma la valida el backend), revisa `exp` y lee el `scope`. Así `PrivateRoute` rechaza tokens vencidos y la UI deshabilita crear/editar/eliminar si el usuario no tiene `blueprints.write` (p. ej. `student`).
+- Login contra `POST /auth/login`. En modo mock se genera un token local con el mismo formato (y `student` también queda de solo lectura, igual que en el backend).
+- CORS: el backend no lo configura, así que Vite hace de proxy (`/api`, `/auth` → `VITE_BACKEND_URL`); en Docker lo hace nginx. El navegador siempre ve un solo origen.
 
 ### Redux
 
-El slice `blueprintsSlice` maneja tres thunks: `fetchByAuthor`, `fetchBlueprint` y `createBlueprint`. Cada thunk tiene su propio par `status`/`error` (`status`/`error` para la búsqueda por autor, `blueprintStatus`/`blueprintError` para abrir un plano, `createStatus`/`createError` para crear uno), así la UI puede mostrar carga y error de forma independiente para cada acción. Si un `GET` falla, se muestra un banner con botón **Reintentar** que vuelve a despachar el mismo thunk. También se agregó `selectTopBlueprints`, un selector memoizado (`createSelector` de Redux Toolkit) que deriva el top-5 de blueprints por cantidad de puntos a partir de todos los autores consultados. Ningún componente toca el DOM directamente.
+`blueprintsSlice` tiene cinco thunks, cada uno con su propio par estado/error:
 
-### Canvas
+| Thunk | Estado | Uso en la UI |
+|---|---|---|
+| `fetchByAuthor` | `status` / `error` | tabla + banner con **Reintentar** |
+| `fetchBlueprint` | `blueprintStatus` / `blueprintError` | canvas + banner con **Reintentar** |
+| `createBlueprint` | `createStatus` / `createError` | formulario |
+| `updateBlueprint` | `updateStatus` / `updateError` | editor (optimista) |
+| `deleteBlueprint` | `deleteStatus` / `deleteError` | editor (optimista) |
 
-`BlueprintCanvas` recibe un array de puntos y los dibuja con líneas y círculos sobre un fondo oscuro con grilla. Los puntos se auto-escalan (`fitPoints`) para ocupar el canvas completo con un margen, sin importar el rango de coordenadas que use el backend o el mock. Se actualiza solo cuando cambian los puntos.
+**Optimistic updates:** en `pending` se guarda una copia del plano (con `current()` de Immer) en `state.rollback["autor/nombre"]` y se aplica el cambio de inmediato. En `fulfilled` se descarta la copia; en `rejected` se restaura (en el caso de `DELETE`, en la misma posición de la tabla) y se muestra el banner "Se revirtió el cambio".
 
-### Login y rutas protegidas
+`selectTopBlueprints` usa `createSelector` para derivar el top-5 por puntos de todos los autores consultados.
 
-El login llama a `POST /auth/login`, guarda el `access_token` en `localStorage` y redirige al inicio. `PrivateRoute` revisa si hay token antes de dejar entrar a cualquier ruta protegida; si no hay, manda al login. Con `VITE_USE_MOCK=true` el login no llama al backend: genera un token local para poder probar toda la app (incluido el login) sin tener el backend corriendo.
+### Canvas y dibujo interactivo
 
----
+`BlueprintCanvas` calcula una transformación mundo→lienzo que encuadra los puntos (`computeView`) y su inversa (`toWorld`). Si recibe `onAddPoint`, cada click se convierte a coordenadas del blueprint (enteras, como las guarda el backend) y la escala se congela mientras se edita para que el dibujo no salte. El primer punto se pinta en verde.
 
-## Decisiones de diseño
-
-- Se usó `blueprintsService.js` como capa de abstracción para que el resto del código no sepa si está hablando con el mock o con el backend real.
-- El mock usa los mismos datos iniciales que el backend (`john/house`, `john/garage`, `jane/garden`) para que la experiencia sea consistente.
-- El `apiClient.js` original se dejó solo para el login (que no pasa por el servicio de blueprints).
+`BlueprintEditor` (pantalla principal y `/blueprints/:author/:name`, que antes usaba un `svg`) ofrece Editar → click para agregar puntos → Deshacer / Limpiar / **Guardar** / Cancelar, y Eliminar con confirmación en línea. `BlueprintForm` permite crear un plano dibujando en su propio canvas; el JSON de puntos se mantiene sincronizado y se valida sin `alert`.
 
 ---
 
 ## Pruebas
 
-Se tienen 4 pruebas con Vitest + Testing Library:
+34 pruebas (Vitest + Testing Library), todas pasan:
 
-| Test | Qué valida |
-|------|-----------|
-| `BlueprintCanvas` | Que el canvas renderiza y llama `getContext` |
-| `BlueprintForm` | Que el formulario parsea el JSON y llama `onSubmit` con los datos correctos |
-| `BlueprintsPage` | Que al hacer click en "Get blueprints" se despacha `fetchByAuthor` con el autor correcto |
-| `blueprintsSlice` | Que el estado inicial del slice es el esperado |
+| Archivo | Qué valida |
+|---|---|
+| `BlueprintCanvas.test.jsx` | render con id y 520×360, `getContext`, segmentos y puntos, click interactivo, `toWorld` inversa de `toCanvas` |
+| `BlueprintForm.test.jsx` | envío con JSON parseado, clicks en el lienzo agregan puntos, validaciones |
+| `BlueprintsPage.test.jsx` | `Get blueprints` despacha `fetchByAuthor` y pinta la tabla, `Open` actualiza el plano actual, banner + Reintentar, usuario de solo lectura |
+| `blueprintsSlice.test.jsx` | reducers puros: carga/error, create, update y delete optimistas con rollback, selector top-5 memoizado |
+| `services.test.js` | misma interfaz en ambos servicios, rutas `/api/v1`, `unwrap`, CRUD del mock |
+| `auth.test.jsx` | decodificación del JWT, scopes, expiración, `PrivateRoute` |
 
-Todas pasan. El mock del canvas en `tests/setup.js` usa `Object.defineProperty` para sobreescribir `getContext` en jsdom.
+Además se probó la app completa en un navegador (Playwright) contra un servidor que imita el contrato del Lab P2: login inválido/válido, tabla, Open, usuario de solo lectura, crear dibujando, PUT/DELETE, rollback ante error y redirección al login con un 401.
+
+---
+
+## Cambios en el backend (Lab P2)
+
+El Lab P2 no tenía `PUT /api/v1/blueprints/{author}/{name}` ni `DELETE /api/v1/blueprints/{author}/{name}` (solo `PUT .../{name}/points`), así que se agregaron:
+
+- `PUT /{author}/{bpname}`: reemplaza todos los puntos y responde `200` con el blueprint actualizado; `400` si falta `points` o si `author`/`name` del cuerpo no coinciden con la URL; `404` si no existe.
+- `DELETE /{author}/{bpname}`: `200` si se eliminó, `404` si no existe.
+- Ambos exigen `blueprints.write`: regla `DELETE /api/** → WRITE` nueva en `SecurityConfig` más `@PreAuthorize` en el controller. Están implementados en la persistencia en memoria y en la de PostgreSQL, y tienen pruebas unitarias y de integración.
+
+Con eso, el CRUD de la UI funciona igual con el mock y con el backend real.
 
 ---
 
@@ -67,20 +105,15 @@ Todas pasan. El mock del canvas en `tests/setup.js` usa `Object.defineProperty` 
 
 ```bash
 npm install
-# con mock (sin backend):
-# VITE_USE_MOCK=true en .env
-npm run dev
-
-# con backend real:
-# VITE_USE_MOCK=false en .env
-# arrancar Lab P2 en puerto 8080
-npm run dev
+npm run dev          # http://localhost:5173
 ```
 
-Usuarios del backend: `student / student123` o `assistant / assistant123`.
+- **Mock** (sin backend): `VITE_USE_MOCK=true` en `.env`. Cualquier usuario entra; `student` es de solo lectura.
+- **Backend real**: `VITE_USE_MOCK=false` y levantar el Lab P2 en el puerto 8080. Usuarios: `student / student123` (lectura) y `assistant / assistant123` (lectura y escritura).
+- **Docker**: `docker compose up --build` (construye el Lab P2 desde la carpeta vecina y sirve el front con nginx en `http://localhost:5173`).
 
 ```bash
-npm test       # correr pruebas
-npm run lint   # linter
+npm test       # pruebas
+npm run lint   # ESLint
 npm run build  # build de producción
 ```

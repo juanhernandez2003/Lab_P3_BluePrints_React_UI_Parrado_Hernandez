@@ -1,4 +1,7 @@
-const MOCK_DATA = [
+// Servicio mock: misma interfaz que apiclientService, datos en memoria.
+// Usa los mismos blueprints iniciales que el backend del Lab P2.
+
+const INITIAL_DATA = [
   {
     author: 'john',
     name: 'house',
@@ -29,28 +32,69 @@ const MOCK_DATA = [
   },
 ]
 
-const delay = () => new Promise((r) => setTimeout(r, 300))
+// Copias profundas: Redux congela lo que guarda, así el "servidor" nunca comparte referencias.
+const clone = (bp) => ({ ...bp, points: (bp.points ?? []).map((p) => ({ x: p.x, y: p.y })) })
+
+let data = INITIAL_DATA.map(clone)
+
+const DELAY_MS = Number(import.meta.env.VITE_MOCK_DELAY_MS ?? 300)
+// Probabilidad (0..1) de que una escritura falle: sirve para ver el rollback optimista.
+const WRITE_FAIL_RATE = Number(import.meta.env.VITE_MOCK_WRITE_FAIL_RATE ?? 0)
+
+const delay = () => new Promise((r) => setTimeout(r, DELAY_MS))
+
+function maybeFail() {
+  if (WRITE_FAIL_RATE > 0 && Math.random() < WRITE_FAIL_RATE) {
+    throw new Error('Error simulado del mock (VITE_MOCK_WRITE_FAIL_RATE)')
+  }
+}
+
+const find = (author, name) => data.findIndex((bp) => bp.author === author && bp.name === name)
 
 export default {
   async getAll() {
     await delay()
-    return [...MOCK_DATA]
+    return data.map(clone)
   },
   async getByAuthor(author) {
     await delay()
-    const result = MOCK_DATA.filter((bp) => bp.author === author)
+    const result = data.filter((bp) => bp.author === author)
     if (!result.length) throw new Error(`No blueprints for author: ${author}`)
-    return result
+    return result.map(clone)
   },
   async getByAuthorAndName(author, name) {
     await delay()
-    const bp = MOCK_DATA.find((bp) => bp.author === author && bp.name === name)
-    if (!bp) throw new Error(`Blueprint not found: ${author}/${name}`)
-    return bp
+    const i = find(author, name)
+    if (i < 0) throw new Error(`Blueprint not found: ${author}/${name}`)
+    return clone(data[i])
   },
   async create(blueprint) {
     await delay()
-    MOCK_DATA.push(blueprint)
-    return blueprint
+    maybeFail()
+    if (find(blueprint.author, blueprint.name) >= 0) {
+      throw new Error(`Blueprint already exists: ${blueprint.author}/${blueprint.name}`)
+    }
+    data.push(clone(blueprint))
+    return clone(blueprint)
+  },
+  async update(author, name, blueprint) {
+    await delay()
+    maybeFail()
+    const i = find(author, name)
+    if (i < 0) throw new Error(`Blueprint not found: ${author}/${name}`)
+    data[i] = clone({ author, name, points: blueprint.points })
+    return clone(data[i])
+  },
+  async remove(author, name) {
+    await delay()
+    maybeFail()
+    const i = find(author, name)
+    if (i < 0) throw new Error(`Blueprint not found: ${author}/${name}`)
+    data.splice(i, 1)
+    return { author, name }
+  },
+  /** Solo para pruebas: restaura los datos iniciales. */
+  __reset() {
+    data = INITIAL_DATA.map(clone)
   },
 }

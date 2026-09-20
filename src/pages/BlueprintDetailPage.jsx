@@ -1,38 +1,71 @@
 import { useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { useParams } from 'react-router-dom'
-import { fetchBlueprint } from '../features/blueprints/blueprintsSlice.js'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import {
+  clearMutationErrors,
+  deleteBlueprint,
+  fetchBlueprint,
+  updateBlueprint,
+} from '../features/blueprints/blueprintsSlice.js'
+import BlueprintEditor from '../components/BlueprintEditor.jsx'
+import ErrorBanner from '../components/ErrorBanner.jsx'
+import { getSession } from '../services/auth.js'
 
 export default function BlueprintDetailPage() {
   const { author, name } = useParams()
   const dispatch = useDispatch()
-  const bp = useSelector((s) => s.blueprints.current)
+  const navigate = useNavigate()
+  const { current, blueprintStatus, blueprintError, updateError, deleteError } = useSelector(
+    (s) => s.blueprints,
+  )
+  const { canWrite } = getSession()
 
   useEffect(() => {
     dispatch(fetchBlueprint({ author, name }))
   }, [author, name, dispatch])
 
-  if (!bp)
-    return (
-      <div className="card">
-        <p>Cargando...</p>
-      </div>
-    )
+  // Evita mostrar un plano anterior mientras llega el de la URL.
+  const bp = current && current.author === author && current.name === name ? current : null
+
+  const handleDelete = async () => {
+    const result = await dispatch(deleteBlueprint({ author, name }))
+    if (deleteBlueprint.fulfilled.match(result)) navigate('/')
+  }
 
   return (
-    <div className="card">
-      <h2 style={{ marginTop: 0 }}>{bp.name}</h2>
+    <div className="card detail">
       <p>
-        <strong>Autor:</strong> {bp.author}
+        <Link to="/" className="muted">
+          ← Volver
+        </Link>
       </p>
-      <p>
-        <strong>Puntos:</strong> {bp.points?.length || 0}
-      </p>
-      <svg width="400" height="200" style={{ background: '#0b1220', borderRadius: 12 }}>
-        {bp.points?.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r="4" />
-        ))}
-      </svg>
+      {blueprintStatus === 'failed' && !bp && (
+        <ErrorBanner
+          message={blueprintError}
+          onRetry={() => dispatch(fetchBlueprint({ author, name }))}
+        />
+      )}
+      {!bp && blueprintStatus !== 'failed' && <p className="muted">Cargando...</p>}
+      {bp && (
+        <>
+          <h2 className="card-title">{bp.name}</h2>
+          <p>
+            <strong>Autor:</strong> {bp.author} · <strong>Puntos:</strong> {bp.points?.length || 0}
+          </p>
+          {(updateError || deleteError) && (
+            <ErrorBanner
+              message={`${updateError || deleteError}. Se revirtió el cambio.`}
+              onClose={() => dispatch(clearMutationErrors())}
+            />
+          )}
+          <BlueprintEditor
+            blueprint={bp}
+            canWrite={canWrite}
+            onSave={(points) => dispatch(updateBlueprint({ author, name, points }))}
+            onDelete={handleDelete}
+          />
+        </>
+      )}
     </div>
   )
 }
