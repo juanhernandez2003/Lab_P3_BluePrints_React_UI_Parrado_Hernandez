@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link } from 'react-router-dom'
 import {
@@ -45,32 +45,32 @@ export default function BlueprintsPage() {
     [items],
   )
 
-  const getBlueprints = (author = authorInput) => {
+  const getBlueprints = useCallback((author = authorInput) => {
     const value = (author || '').trim()
     if (!value) return
     setSelectedAuthor(value)
     dispatch(fetchByAuthor(value))
-  }
+  }, [authorInput, dispatch])
 
-  const openBlueprint = (bp) => {
+  const openBlueprint = useCallback((bp) => {
     setLastOpened({ author: bp.author, name: bp.name })
     dispatch(fetchBlueprint({ author: bp.author, name: bp.name }))
-  }
+  }, [dispatch])
 
-  const handleCreate = async (blueprint) => {
+  const handleCreate = useCallback(async (blueprint) => {
     const result = await dispatch(createBlueprint(blueprint))
     if (createBlueprint.fulfilled.match(result)) setShowForm(false)
-  }
+  }, [dispatch])
 
-  const handleSave = (points) => {
+  const handleSave = useCallback((points) => {
     if (!current) return
     dispatch(updateBlueprint({ author: current.author, name: current.name, points }))
-  }
+  }, [current, dispatch])
 
-  const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     if (!current) return
     dispatch(deleteBlueprint({ author: current.author, name: current.name }))
-  }
+  }, [current, dispatch])
 
   const mutationError =
     (updateError && `No se pudo guardar: ${updateError}. Se revirtió el cambio.`) ||

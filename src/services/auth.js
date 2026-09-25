@@ -14,6 +14,8 @@ export function getToken() {
   }
 }
 
+// NOTA DE SEGURIDAD: localStorage es accesible desde JS y vulnerable a XSS.
+// En producción, preferir httpOnly cookies (requiere soporte del backend).
 export function setToken(token) {
   try {
     localStorage.setItem(TOKEN_KEY, token)

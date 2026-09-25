@@ -4,100 +4,122 @@
 
 ---
 
-## Qué se hizo
+## La aplicación en funcionamiento
 
-Una SPA en React + Vite que consume el backend del Lab P2 (Spring Boot + JWT RS256). Permite:
+### Login
 
-- Iniciar sesión (JWT) y proteger todas las rutas con `PrivateRoute`.
-- Buscar los blueprints de un autor, verlos en una tabla (nombre, número de puntos, `Open`) y el total de puntos.
-- Abrir un plano: su nombre queda en el estado global (Redux) y se dibuja en el canvas (segmentos consecutivos + cada punto marcado).
-- **CRUD completo**: crear (dibujando con clicks o escribiendo JSON), editar (click en el lienzo agrega puntos → `Guardar` envía `PUT`) y eliminar (`DELETE`), con **optimistic updates** que se revierten si el servidor falla.
-- Top-5 de blueprints por cantidad de puntos (selector memoizado).
-- Modo claro/oscuro y diseño responsive.
+Aquí se ve la pantalla de inicio de sesión. Como el proyecto está configurado en modo mock, no hace falta tener el backend corriendo: cualquier usuario y contraseña funcionan. Si se entra con el usuario `student`, la app queda en modo solo lectura y no deja crear ni editar planos.
+
+![Login](image.png)
 
 ---
 
-## Requerimientos del laboratorio
+### Lista de blueprints de un autor
 
-| # | Requerimiento | Dónde |
-|---|---|---|
-| 1 | Canvas con id propio (`blueprint-canvas`), 520×360 | `components/BlueprintCanvas.jsx` |
-| 2 | Consultar planos por autor y mostrarlos en tabla con `Open` | `pages/BlueprintsPage.jsx` |
-| 3 | `Open` actualiza el campo "Plano actual", trae los puntos y los dibuja | `fetchBlueprint` + `BlueprintEditor` |
-| 4 | `apimock` y `apiclient` con la misma interfaz; cambio con `VITE_USE_MOCK` | `services/` |
-| 5 | Nombre del plano actual desde Redux, sin tocar el DOM | `state.blueprints.current` |
-| 6 | Estilos (tabla, botones, tarjetas, banners, tema claro/oscuro) | `styles.css` |
-| 7 | Pruebas con Vitest + Testing Library | `tests/` (34 pruebas) |
+Después de iniciar sesión, se puede buscar los planos de un autor escribiendo su nombre y haciendo clic en "Get blueprints". En este caso se buscó a `john` y aparecen sus dos planos (`house` y `garage`) con la cantidad de puntos de cada uno. Abajo de la tabla se muestra el total de puntos del autor.
+
+![Lista de blueprints](image-1.png)
 
 ---
 
-## Partes principales
+### Canvas con un plano dibujado
 
-### Servicios (`apimock` / `apiclient`)
+Al hacer clic en "Open" en cualquier fila de la tabla, el plano se dibuja en el canvas de la derecha. Las líneas azules conectan los puntos en orden, el primer punto aparece en verde y los demás en amarillo. El campo "Plano actual" también se actualiza con el nombre del plano abierto.
 
-Ambos exponen `getAll`, `getByAuthor`, `getByAuthorAndName`, `create`, `update` y `remove`.
+![Canvas con plano dibujado](image-2.png)
 
-- `apimock.js`: datos en memoria (los mismos tres blueprints que el backend). Devuelve copias para que Redux (que congela el estado) nunca comparta referencias con el "servidor". Con `VITE_MOCK_WRITE_FAIL_RATE` se pueden simular fallos de escritura para ver el rollback.
-- `apiclientService.js`: Axios contra `/api/v1/blueprints`. El backend responde `{ code, message, data }`, así que `unwrap` extrae `data`.
-- `blueprintsService.js`: la única línea que decide cuál usar según `VITE_USE_MOCK`.
+---
 
-### Seguridad (JWT)
+### Modo edición
 
-- `apiClient.js`: instancia única de Axios con dos interceptores. El de salida agrega `Authorization: Bearer <token>`. El de entrada traduce errores: un `401` borra el token y emite `auth:expired` (la app redirige al login con el aviso "Tu sesión expiró"); un `403` muestra "scope insuficiente"; si no hay conexión lo dice claramente.
-- `auth.js`: decodifica el payload del JWT (solo para la UI, la firma la valida el backend), revisa `exp` y lee el `scope`. Así `PrivateRoute` rechaza tokens vencidos y la UI deshabilita crear/editar/eliminar si el usuario no tiene `blueprints.write` (p. ej. `student`).
-- Login contra `POST /auth/login`. En modo mock se genera un token local con el mismo formato (y `student` también queda de solo lectura, igual que en el backend).
-- CORS: el backend no lo configura, así que Vite hace de proxy (`/api`, `/auth` → `VITE_BACKEND_URL`); en Docker lo hace nginx. El navegador siempre ve un solo origen.
+Con un plano abierto, al hacer clic en "Editar" el canvas se vuelve interactivo. Cada clic en el lienzo agrega un punto nuevo al borrador. Se puede deshacer el último punto, limpiar todo, o guardar los cambios con el botón "Guardar", que envía los puntos actualizados al servidor (o al mock).
 
-### Redux
+![Modo edición](image-3.png)
 
-`blueprintsSlice` tiene cinco thunks, cada uno con su propio par estado/error:
+---
 
-| Thunk | Estado | Uso en la UI |
-|---|---|---|
-| `fetchByAuthor` | `status` / `error` | tabla + banner con **Reintentar** |
-| `fetchBlueprint` | `blueprintStatus` / `blueprintError` | canvas + banner con **Reintentar** |
-| `createBlueprint` | `createStatus` / `createError` | formulario |
-| `updateBlueprint` | `updateStatus` / `updateError` | editor (optimista) |
-| `deleteBlueprint` | `deleteStatus` / `deleteError` | editor (optimista) |
+### Dark mode y light mode
 
-**Optimistic updates:** en `pending` se guarda una copia del plano (con `current()` de Immer) en `state.rollback["autor/nombre"]` y se aplica el cambio de inmediato. En `fulfilled` se descarta la copia; en `rejected` se restaura (en el caso de `DELETE`, en la misma posición de la tabla) y se muestra el banner "Se revirtió el cambio".
+La app tiene soporte para modo oscuro y claro. Se cambia con el botón de la barra de navegación y la preferencia se guarda para la próxima vez que se abra.
 
-`selectTopBlueprints` usa `createSelector` para derivar el top-5 por puntos de todos los autores consultados.
+![Dark y light mode](image-4.png)
 
-### Canvas y dibujo interactivo
+---
 
-`BlueprintCanvas` calcula una transformación mundo→lienzo que encuadra los puntos (`computeView`) y su inversa (`toWorld`). Si recibe `onAddPoint`, cada click se convierte a coordenadas del blueprint (enteras, como las guarda el backend) y la escala se congela mientras se edita para que el dibujo no salte. El primer punto se pinta en verde.
+### Pruebas pasando
 
-`BlueprintEditor` (pantalla principal y `/blueprints/:author/:name`, que antes usaba un `svg`) ofrece Editar → click para agregar puntos → Deshacer / Limpiar / **Guardar** / Cancelar, y Eliminar con confirmación en línea. `BlueprintForm` permite crear un plano dibujando en su propio canvas; el JSON de puntos se mantiene sincronizado y se valida sin `alert`.
+Se corrieron las pruebas con `npm test`. Las 34 pruebas pasan sin errores.
+
+![Pruebas](image-5.png)
+
+---
+
+## Qué se construyó
+
+El laboratorio pedía modernizar el cliente clásico de Blueprints a una SPA en React. Partimos del cliente HTML/JS original y lo reescribimos usando React + Vite, Redux Toolkit para el estado global, Axios para las peticiones al backend y React Router para la navegación.
+
+La app permite buscar los planos de un autor, abrirlos y verlos dibujados en un canvas, editarlos haciendo clic en el lienzo, crear planos nuevos y eliminarlos. Todo con autenticación JWT: si el token expira, la app redirige al login automáticamente.
+
+---
+
+## Cómo funciona por dentro
+
+### Los dos modos: mock y backend real
+
+Uno de los requerimientos era poder cambiar entre datos de prueba y el backend real con una sola línea. Eso se resuelve con la variable `VITE_USE_MOCK` en el archivo `.env`:
+
+- Con `VITE_USE_MOCK=true` se usan datos en memoria, sin necesidad de tener el backend corriendo. Útil para desarrollar y para las pruebas.
+- Con `VITE_USE_MOCK=false` se conecta al backend del Lab P2 en Spring Boot.
+
+Ambos modos exponen exactamente la misma interfaz (`getByAuthor`, `create`, `update`, etc.), así que el resto de la app no sabe ni le importa cuál está usando.
+
+### El estado global con Redux
+
+Todo lo que la app necesita recordar vive en Redux: los planos cargados, el plano que está abierto ahora mismo, si hay algo cargando, si hubo un error. Así cualquier componente puede leer esa información sin tener que pasarla de padre a hijo por props.
+
+Cuando se guarda o elimina un plano, el cambio se aplica de inmediato en la pantalla (optimistic update) y si el servidor responde con error, se revierte automáticamente y aparece un aviso.
+
+### Seguridad con JWT
+
+Al iniciar sesión se recibe un token JWT que se guarda y se adjunta automáticamente a cada petición al backend. Si el servidor responde con un 401 (sesión vencida), la app borra el token y manda al login con un aviso. Las rutas de creación y edición están protegidas: si el usuario no tiene el permiso de escritura, los botones aparecen deshabilitados.
+
+### El canvas
+
+El canvas dibuja los segmentos del plano ajustando la escala automáticamente para que siempre quepan todos los puntos. En modo edición, cada clic en el lienzo se convierte a coordenadas del plano y se agrega como punto nuevo. La escala se congela mientras se edita para que el dibujo no salte al agregar puntos.
 
 ---
 
 ## Pruebas
 
-34 pruebas (Vitest + Testing Library), todas pasan:
+Se escribieron 34 pruebas con Vitest y Testing Library que cubren los componentes principales, el slice de Redux y los servicios. Para que el canvas funcione en el entorno de pruebas (que no tiene navegador real), se mockeó `getContext` en el archivo de setup.
 
-| Archivo | Qué valida |
-|---|---|
-| `BlueprintCanvas.test.jsx` | render con id y 520×360, `getContext`, segmentos y puntos, click interactivo, `toWorld` inversa de `toCanvas` |
-| `BlueprintForm.test.jsx` | envío con JSON parseado, clicks en el lienzo agregan puntos, validaciones |
-| `BlueprintsPage.test.jsx` | `Get blueprints` despacha `fetchByAuthor` y pinta la tabla, `Open` actualiza el plano actual, banner + Reintentar, usuario de solo lectura |
-| `blueprintsSlice.test.jsx` | reducers puros: carga/error, create, update y delete optimistas con rollback, selector top-5 memoizado |
-| `services.test.js` | misma interfaz en ambos servicios, rutas `/api/v1`, `unwrap`, CRUD del mock |
-| `auth.test.jsx` | decodificación del JWT, scopes, expiración, `PrivateRoute` |
-
-Además se probó la app completa en un navegador (Playwright) contra un servidor que imita el contrato del Lab P2: login inválido/válido, tabla, Open, usuario de solo lectura, crear dibujando, PUT/DELETE, rollback ante error y redirección al login con un 401.
+También se probó la app manualmente en el navegador: login, búsqueda, abrir planos, editar, crear, eliminar, el rollback cuando falla una operación y la redirección al login cuando expira la sesión.
 
 ---
 
-## Cambios en el backend (Lab P2)
+## Cambios al backend (Lab P2)
 
-El Lab P2 no tenía `PUT /api/v1/blueprints/{author}/{name}` ni `DELETE /api/v1/blueprints/{author}/{name}` (solo `PUT .../{name}/points`), así que se agregaron:
+El backend original no tenía endpoints para actualizar ni eliminar planos completos, así que se agregaron `PUT /api/v1/blueprints/{author}/{name}` y `DELETE /api/v1/blueprints/{author}/{name}`. Ambos requieren el permiso de escritura y están cubiertos con pruebas en el backend también.
 
-- `PUT /{author}/{bpname}`: reemplaza todos los puntos y responde `200` con el blueprint actualizado; `400` si falta `points` o si `author`/`name` del cuerpo no coinciden con la URL; `404` si no existe.
-- `DELETE /{author}/{bpname}`: `200` si se eliminó, `404` si no existe.
-- Ambos exigen `blueprints.write`: regla `DELETE /api/** → WRITE` nueva en `SecurityConfig` más `@PreAuthorize` en el controller. Están implementados en la persistencia en memoria y en la de PostgreSQL, y tienen pruebas unitarias y de integración.
+---
 
-Con eso, el CRUD de la UI funciona igual con el mock y con el backend real.
+## Variables de entorno
+
+El archivo `.env` en la raíz controla el comportamiento de la app:
+
+- `VITE_USE_MOCK`: `true` para modo mock, `false` para backend real.
+- `VITE_API_BASE_URL`: prefijo de los endpoints (`/api/v1`).
+- `VITE_AUTH_URL`: endpoint de login (`/auth/login`).
+- `VITE_BACKEND_URL`: URL del backend para el proxy de Vite (`http://localhost:8080`).
+- `VITE_MOCK_WRITE_FAIL_RATE`: número entre 0 y 1 para simular fallos de escritura y ver el rollback en acción.
+
+El archivo `.env.example` tiene los valores por defecto listos para copiar.
+
+---
+
+## CI con GitHub Actions
+
+Cada push al repositorio dispara un workflow que corre el linter, las pruebas y el build de producción en ese orden. Si algo falla, el workflow queda en rojo.
 
 ---
 
@@ -105,15 +127,15 @@ Con eso, el CRUD de la UI funciona igual con el mock y con el backend real.
 
 ```bash
 npm install
-npm run dev          # http://localhost:5173
+npm run dev
 ```
 
-- **Mock** (sin backend): `VITE_USE_MOCK=true` en `.env`. Cualquier usuario entra; `student` es de solo lectura.
-- **Backend real**: `VITE_USE_MOCK=false` y levantar el Lab P2 en el puerto 8080. Usuarios: `student / student123` (lectura) y `assistant / assistant123` (lectura y escritura).
-- **Docker**: `docker compose up --build` (construye el Lab P2 desde la carpeta vecina y sirve el front con nginx en `http://localhost:5173`).
+Abre `http://localhost:5173`. Con `VITE_USE_MOCK=true` no hace falta el backend.
+
+Para conectar al backend real: cambiar a `VITE_USE_MOCK=false` y tener el Lab P2 corriendo en el puerto 8080. Usuarios: `student / student123` (solo lectura) y `assistant / assistant123` (lectura y escritura).
 
 ```bash
-npm test       # pruebas
-npm run lint   # ESLint
-npm run build  # build de producción
+npm test        # pruebas
+npm run lint    # linter
+npm run build   # build de producción
 ```

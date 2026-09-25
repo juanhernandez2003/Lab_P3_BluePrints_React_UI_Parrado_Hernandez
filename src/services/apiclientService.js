@@ -1,6 +1,5 @@
 import api, { API_BASE_URL, unwrap } from './apiClient.js'
 
-// Servicio real: consume el API REST de Blueprints con Axios (JWT vía interceptor).
 const url = (...parts) =>
   [`${API_BASE_URL}/blueprints`, ...parts.map((p) => encodeURIComponent(p))].join('/')
 
